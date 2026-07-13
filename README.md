@@ -280,7 +280,9 @@ jira-agent doctor
 
 Проверка: `Get-Command jira-agent` должен показать `.venv\Scripts\jira-agent.exe`.
 
-Значит используется Python, куда пакет не установлен. Исправление:
+### `ModuleNotFoundError: No module named 'jira_agent'`
+
+Пакет не установлен в текущий Python:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
@@ -288,7 +290,7 @@ pip install -e .
 python -c "from jira_agent.cli import app; print('ok')"
 ```
 
-Или без установки: `python run.py chat -p ITSM`
+Или без установки: `.\jira-agent.cmd chat -p ITSM`
 
 ## SSL / корпоративный Jira
 
