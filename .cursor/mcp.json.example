@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jira-dc": {
+      "command": "python",
+      "args": ["-m", "jira_agent.mcp_server"],
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      }
+    }
+  }
+}

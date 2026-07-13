@@ -1,8 +1,55 @@
 # Jira Data Center AI Agent
 
-AI-агент для **Jira Data Center**: отвечает на вопросы по **задачам** и **Insight/Assets** в указанных проектах.
+AI-агент для **Jira Data Center**: задачи и Insight/Assets по проектам.
 
-LLM по умолчанию: **DeepSeek Cloud** (`https://api.deepseek.com`, модель `deepseek-chat`). Опционально — OpenAI / OpenRouter / локальный Ollama.
+**Рекомендуемый режим: Cursor Agent + MCP** (модели Cursor по подписке, без DeepSeek).  
+Опционально: CLI с DeepSeek / OpenAI / Ollama.
+
+## Cursor (рекомендуется)
+
+У Cursor **нет** публичного `chat/completions` API для сторонних приложений.  
+Поэтому Jira-инструменты подключаются как **MCP-сервер** — Agent в Cursor сам вызывает их своими моделями.
+
+1. Установите пакет и заполните `.env` (Jira; `DEEPSEEK_API_KEY` не нужен для MCP):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -e .
+copy .env.example .env
+# заполните JIRA_* 
+```
+
+2. Скопируйте MCP-конфиг:
+
+```powershell
+copy .cursor\mcp.json.example .cursor\mcp.json
+```
+
+При необходимости укажите полный путь к Python из venv в `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "jira-dc": {
+      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "args": ["-m", "jira_agent.mcp_server"],
+      "envFile": "${workspaceFolder}/.env",
+      "env": { "PYTHONPATH": "${workspaceFolder}/src" }
+    }
+  }
+}
+```
+
+3. В Cursor: **Settings → MCP** — включите `jira-dc`, Reload Window.  
+4. В **Agent** чате спросите, например: «Покажи открытые задачи ITSM и связанные активы».
+
+Проверка MCP без Cursor:
+
+```powershell
+python scripts\mcp_smoke.py
+```
 
 ## Структура проекта
 
@@ -26,16 +73,21 @@ LLM по умолчанию: **DeepSeek Cloud** (`https://api.deepseek.com`, м�
 │       ├── jira_client.py    # /rest/api/2/*
 │       ├── llm.py            # фабрика: deepseek | openai | ollama
 │       ├── ollama_client.py  # локальный Ollama (опционально)
-│       ├── openai_client.py  # DeepSeek / OpenAI-compatible cloud
+│       ├── openai_client.py  # DeepSeek / OpenAI-compatible cloud (CLI)
+│       ├── mcp_server.py     # MCP для Cursor Agent
 │       ├── prompts.py
 │       ├── serializers.py
 │       └── tools.py
+├── .cursor/
+│   └── mcp.json.example
 └── tests/
     ├── test_agent.py
     └── test_core.py
 ```
 
-## DeepSeek Cloud (по умолчанию)
+## CLI + DeepSeek / OpenAI (опционально)
+
+Если нужен отдельный CLI-чат вне Cursor:
 
 1. Ключ API: https://platform.deepseek.com/api_keys  
 2. В `.env`:
