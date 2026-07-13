@@ -18,21 +18,22 @@ git pull
 notepad .env
 ```
 
-Скрипт создаст `.cursor\mcp.json`, который запускает MCP так:
+Скрипт создаст `.cursor\mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "jira-dc": {
-      "command": "cmd.exe",
-      "args": ["/c", "${workspaceFolder}\\jira-agent-mcp.cmd"],
-      "envFile": "${workspaceFolder}\\.env"
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["${workspaceFolder}\\run_mcp.py"],
+      "envFile": "${workspaceFolder}\\.env",
+      "env": { "PYTHONUNBUFFERED": "1" }
     }
   }
 }
 ```
 
-Лаунчер `jira-agent-mcp.cmd` сам находит `.venv\Scripts\python.exe` (это чинит ошибку Windows «не удаётся найти указанный путь»).
+Не используйте `cmd.exe` в MCP — он ломает stdio и Cursor зависает на "loading tools".
 
 В `.env` заполните только Jira (пример):
 

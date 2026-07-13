@@ -20,40 +20,40 @@ $EnvFile = Join-Path $Root ".env"
 $EnvExample = Join-Path $Root ".env.example"
 if (-not (Test-Path $EnvFile)) {
   Copy-Item $EnvExample $EnvFile
-  Write-Host "Created .env - fill JIRA_* only (no DeepSeek key needed)"
+  Write-Host "Created .env - fill JIRA_* only"
 }
 
 $CursorDir = Join-Path $Root ".cursor"
 New-Item -ItemType Directory -Force -Path $CursorDir | Out-Null
+Copy-Item (Join-Path $CursorDir "mcp.json.example") (Join-Path $CursorDir "mcp.json") -Force
+Write-Host "Wrote .cursor\mcp.json (direct python.exe + run_mcp.py)"
 
-$McpExample = Join-Path $CursorDir "mcp.json.example"
-$McpJson = Join-Path $CursorDir "mcp.json"
-Copy-Item $McpExample $McpJson -Force
-Write-Host "Wrote .cursor\mcp.json"
-
-$Launcher = Join-Path $Root "jira-agent-mcp.cmd"
-if (-not (Test-Path $Launcher)) {
-  throw "Missing jira-agent-mcp.cmd in repo root. Run: git pull"
-}
-if (-not (Test-Path $Python)) {
-  throw "Missing .venv\Scripts\python.exe"
-}
+$RunMcp = Join-Path $Root "run_mcp.py"
+if (-not (Test-Path $RunMcp)) { throw "Missing run_mcp.py" }
+if (-not (Test-Path $Python)) { throw "Missing .venv\Scripts\python.exe" }
 
 Write-Host ""
 Write-Host "MCP protocol smoke:"
 & $Python (Join-Path $Root "scripts\mcp_smoke.py")
-if ($LASTEXITCODE -ne 0) {
-  throw "mcp_smoke.py failed"
+if ($LASTEXITCODE -ne 0) { throw "mcp_smoke.py failed" }
+
+Write-Host ""
+Write-Host "Manual start test (2 sec)..."
+$p = Start-Process -FilePath $Python -ArgumentList $RunMcp -PassThru -WindowStyle Hidden -RedirectStandardError (Join-Path $env:TEMP "jira-mcp-err.txt")
+Start-Sleep -Seconds 2
+if (-not $p.HasExited) {
+  Stop-Process -Id $p.Id -Force
+  Write-Host "python run_mcp.py starts OK"
+} else {
+  Write-Host "python run_mcp.py exited early. See %TEMP%\jira-mcp-err.txt"
+  Get-Content (Join-Path $env:TEMP "jira-mcp-err.txt") -ErrorAction SilentlyContinue
 }
 
 Write-Host ""
-Write-Host "NEXT:"
-Write-Host "  1) Open THIS repo folder as Cursor workspace"
-Write-Host "  2) Settings -> MCP -> enable jira-dc (green)"
-Write-Host "  3) Command Palette -> Developer: Reload Window"
-Write-Host "  4) Ask in Agent (NOT jira-agent.cmd chat)"
+Write-Host "NEXT in Cursor:"
+Write-Host "  1) Settings -> MCP -> disable/enable jira-dc"
+Write-Host "  2) Command Palette -> Developer: Reload Window"
+Write-Host "  3) Wait until tools are listed (not 'loading')"
+Write-Host "  4) Ask in Agent chat"
 Write-Host ""
-Write-Host "Check files:"
-Write-Host ("  " + $Launcher)
-Write-Host ("  " + $Python)
-Write-Host ("  " + $McpJson)
+Write-Host "mcp.json must use python.exe + run_mcp.py (NOT cmd.exe)"

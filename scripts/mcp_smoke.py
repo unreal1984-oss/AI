@@ -46,7 +46,7 @@ def main() -> int:
     env.setdefault("DEEPSEEK_API_KEY", "unused")
 
     proc = subprocess.Popen(
-        [sys.executable, "-m", "jira_agent.mcp_server"],
+        [sys.executable, str(ROOT / "run_mcp.py")],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

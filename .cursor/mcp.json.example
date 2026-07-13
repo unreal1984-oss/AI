@@ -1,9 +1,12 @@
 {
   "mcpServers": {
     "jira-dc": {
-      "command": "cmd.exe",
-      "args": ["/c", "${workspaceFolder}\\jira-agent-mcp.cmd"],
-      "envFile": "${workspaceFolder}\\.env"
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["${workspaceFolder}\\run_mcp.py"],
+      "envFile": "${workspaceFolder}\\.env",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      }
     }
   }
 }
