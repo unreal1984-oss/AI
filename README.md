@@ -57,11 +57,31 @@
 
 ## Установка
 
+Пакет лежит в `src/jira_agent` — его нужно поставить в venv (иначе будет `ModuleNotFoundError: No module named 'jira_agent'`).
+
 ```bash
 chmod +x scripts/bootstrap.sh
 ./scripts/bootstrap.sh
 source .venv/bin/activate
 cp .env.example .env
+```
+
+Ручная установка:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+python -c "from jira_agent.cli import app; print('ok')"
+```
+
+Запуск **без** `pip install -e .` (через `PYTHONPATH`):
+
+```bash
+python run.py doctor
+# или
+PYTHONPATH=src python -m jira_agent doctor
 ```
 
 Заполните `.env`:
@@ -150,6 +170,26 @@ python -m jira_agent doctor
 ```bash
 source .venv/bin/activate
 pytest -q
+```
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'jira_agent'`
+
+Значит используется Python, куда пакет не установлен. Исправление:
+
+```bash
+# из корня репозитория
+source .venv/bin/activate   # если venv ещё нет — ./scripts/bootstrap.sh
+pip install -e .
+which python                # должен указывать на .../AI/.venv/bin/python
+python -c "from jira_agent.cli import app; print('ok')"
+```
+
+Либо без установки:
+
+```bash
+python run.py chat -p ITSM
 ```
 
 ## SSL / корпоративный Jira
