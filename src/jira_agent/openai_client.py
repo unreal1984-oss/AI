@@ -110,7 +110,7 @@ class OpenAICompatibleClient:
         response = self._client.post("/chat/completions", json=payload)
         if response.status_code >= 400:
             raise OpenAICompatibleError(
-                f"OpenAI chat failed: {response.status_code} {response.text[:1500]}"
+                _format_api_error(response.status_code, response.text, self.provider_name)
             )
         data = response.json()
         choices = data.get("choices") or []
@@ -118,6 +118,26 @@ class OpenAICompatibleClient:
             raise OpenAICompatibleError(f"Unexpected OpenAI response: {data!r}")
         message = choices[0].get("message") or {}
         return _normalize_openai_assistant(message)
+
+
+def _format_api_error(status_code: int, body: str, provider: str) -> str:
+    text = (body or "")[:1500]
+    lower = text.lower()
+    if status_code == 402 or "insufficient balance" in lower:
+        return (
+            f"{provider}: недостаточно средств на балансе API (HTTP 402). "
+            "Пополните счёт: https://platform.deepseek.com/usage "
+            "или проверьте биллинг в кабинете провайдера."
+        )
+    if status_code == 401:
+        return (
+            f"{provider}: неверный API-ключ (HTTP 401). "
+            "Проверьте DEEPSEEK_API_KEY в .env "
+            "(https://platform.deepseek.com/api_keys)."
+        )
+    if status_code == 429:
+        return f"{provider}: лимит запросов (HTTP 429). Подождите и повторите."
+    return f"{provider} chat failed: {status_code} {text}"
 
 
 def _to_openai_message(message: dict[str, Any]) -> dict[str, Any]:
