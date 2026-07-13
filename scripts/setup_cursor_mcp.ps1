@@ -1,59 +1,59 @@
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
-Set-Location (Split-Path -Parent $PSScriptRoot)
+
+$Root = Split-Path -Parent $PSScriptRoot
+Set-Location $Root
 
 Write-Host "== Jira DC MCP setup for Cursor (Windows) =="
 
-if (-not (Test-Path .venv\Scripts\python.exe)) {
+$Python = Join-Path $Root ".venv\Scripts\python.exe"
+if (-not (Test-Path $Python)) {
   Write-Host "Creating .venv ..."
   python -m venv .venv
 }
 
-& .\.venv\Scripts\python.exe -m pip install -U pip
-& .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-& .\.venv\Scripts\python.exe -m pip install -e .
+& $Python -m pip install -U pip
+& $Python -m pip install -r requirements.txt
+& $Python -m pip install -e .
 
-if (-not (Test-Path .env)) {
-  Copy-Item .env.example .env
-  Write-Host "Created .env — fill JIRA_* only (no DeepSeek key needed)"
+$EnvFile = Join-Path $Root ".env"
+$EnvExample = Join-Path $Root ".env.example"
+if (-not (Test-Path $EnvFile)) {
+  Copy-Item $EnvExample $EnvFile
+  Write-Host "Created .env - fill JIRA_* only (no DeepSeek key needed)"
 }
 
-New-Item -ItemType Directory -Force -Path .cursor | Out-Null
-Copy-Item .cursor\mcp.json.example .cursor\mcp.json -Force
-Write-Host "Wrote .cursor\mcp.json -> cmd.exe /c jira-agent-mcp.cmd"
+$CursorDir = Join-Path $Root ".cursor"
+New-Item -ItemType Directory -Force -Path $CursorDir | Out-Null
 
-Write-Host ""
-Write-Host "Testing launcher..."
-$psi = New-Object System.Diagnostics.ProcessStartInfo
-$psi.FileName = "cmd.exe"
-$psi.Arguments = "/c `"$PWD\jira-agent-mcp.cmd`""
-$psi.RedirectStandardInput = $true
-$psi.RedirectStandardOutput = $true
-$psi.RedirectStandardError = $true
-$psi.UseShellExecute = $false
-$psi.WorkingDirectory = "$PWD"
-$p = [System.Diagnostics.Process]::Start($psi)
-Start-Sleep -Milliseconds 800
-if (-not $p.HasExited) {
-  $p.Kill()
-  Write-Host "Launcher starts OK (killed after smoke start)"
-} else {
-  $err = $p.StandardError.ReadToEnd()
-  Write-Host "Launcher exited early. stderr:"
-  Write-Host $err
+$McpExample = Join-Path $CursorDir "mcp.json.example"
+$McpJson = Join-Path $CursorDir "mcp.json"
+Copy-Item $McpExample $McpJson -Force
+Write-Host "Wrote .cursor\mcp.json"
+
+$Launcher = Join-Path $Root "jira-agent-mcp.cmd"
+if (-not (Test-Path $Launcher)) {
+  throw "Missing jira-agent-mcp.cmd in repo root. Run: git pull"
+}
+if (-not (Test-Path $Python)) {
+  throw "Missing .venv\Scripts\python.exe"
 }
 
 Write-Host ""
 Write-Host "MCP protocol smoke:"
-& .\.venv\Scripts\python.exe scripts\mcp_smoke.py
+& $Python (Join-Path $Root "scripts\mcp_smoke.py")
+if ($LASTEXITCODE -ne 0) {
+  throw "mcp_smoke.py failed"
+}
 
 Write-Host ""
 Write-Host "NEXT:"
 Write-Host "  1) Open THIS repo folder as Cursor workspace"
-Write-Host "  2) Settings -> MCP -> enable jira-dc (should be green)"
+Write-Host "  2) Settings -> MCP -> enable jira-dc (green)"
 Write-Host "  3) Command Palette -> Developer: Reload Window"
-Write-Host "  4) Ask in Agent (not jira-agent.cmd chat)"
+Write-Host "  4) Ask in Agent (NOT jira-agent.cmd chat)"
 Write-Host ""
-Write-Host "If MCP still fails, check that file exists:"
-Write-Host "  $PWD\jira-agent-mcp.cmd"
-Write-Host "  $PWD\.venv\Scripts\python.exe"
+Write-Host "Check files:"
+Write-Host ("  " + $Launcher)
+Write-Host ("  " + $Python)
+Write-Host ("  " + $McpJson)
