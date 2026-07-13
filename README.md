@@ -105,8 +105,8 @@ python --version
 
 .\scripts\bootstrap.ps1
 copy .env.example .env
-.\.venv\Scripts\Activate.ps1
-jira-agent doctor
+.\jira-agent.cmd doctor
+.\jira-agent.cmd chat -p ITSM
 ```
 
 Или вручную:
@@ -255,7 +255,30 @@ pip install -e .
 
 Если всё ещё тянется старый `requirements.txt` с pydantic — убедитесь, что в файле **нет** строк `pydantic` / `pydantic-settings`.
 
-### `ModuleNotFoundError: No module named 'jira_agent'`
+### Windows: `jira-agent` не распознан
+
+В PowerShell команда из PATH появляется только после editable-install **и** активации venv.
+
+Самый простой запуск (без PATH):
+
+```powershell
+.\jira-agent.cmd doctor
+.\jira-agent.cmd chat -p ITSM
+# или
+python run.py chat -p ITSM
+```
+
+Чтобы работало как `jira-agent`:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -e .
+jira-agent doctor
+```
+
+Проверка: `Get-Command jira-agent` должен показать `.venv\Scripts\jira-agent.exe`.
 
 Значит используется Python, куда пакет не установлен. Исправление:
 
