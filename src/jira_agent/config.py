@@ -10,6 +10,10 @@ from typing import List
 
 from dotenv import load_dotenv
 
+DEEPSEEK_DEFAULT_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-chat"
+CLOUD_PROVIDERS = {"openai", "openai_compatible", "cloud", "openrouter", "deepseek"}
+
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -50,20 +54,20 @@ class Settings:
 
     assets_object_schema_id: int = 8
 
-    # LLM provider: ollama | openai (OpenAI-compatible cloud)
-    llm_provider: str = "ollama"
+    # LLM provider: deepseek (default) | openai | ollama
+    llm_provider: str = "deepseek"
+    llm_temperature: float = 0.2
 
-    # Ollama (local)
+    # Ollama (local, optional)
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen2.5:7b"
-    ollama_temperature: float = 0.2
     ollama_num_ctx: int = 8192
     ollama_timeout_seconds: float = 180.0
 
-    # OpenAI-compatible cloud
+    # OpenAI-compatible cloud (DeepSeek by default)
     openai_api_key: str = ""
-    openai_base_url: str = "https://api.openai.com/v1"
-    openai_model: str = "gpt-4o-mini"
+    openai_base_url: str = DEEPSEEK_DEFAULT_BASE_URL
+    openai_model: str = DEEPSEEK_DEFAULT_MODEL
     openai_org_id: str = ""
     openai_timeout_seconds: float = 120.0
 
@@ -72,16 +76,23 @@ class Settings:
     agent_max_assets: int = 50
     agent_language: str = "ru"
 
+    # Back-compat alias used by older clients
+    @property
+    def ollama_temperature(self) -> float:
+        return self.llm_temperature
+
+    @property
+    def is_cloud(self) -> bool:
+        return (self.llm_provider or "").strip().lower() in CLOUD_PROVIDERS
+
     @property
     def active_model(self) -> str:
-        provider = (self.llm_provider or "ollama").strip().lower()
-        if provider in {"openai", "openai_compatible", "cloud", "openrouter", "deepseek"}:
+        if self.is_cloud:
             return self.openai_model
         return self.ollama_model
 
     def set_active_model(self, model: str) -> None:
-        provider = (self.llm_provider or "ollama").strip().lower()
-        if provider in {"openai", "openai_compatible", "cloud", "openrouter", "deepseek"}:
+        if self.is_cloud:
             self.openai_model = model
         else:
             self.ollama_model = model
@@ -113,6 +124,32 @@ class Settings:
                 "JIRA_BASE_URL is required. Copy .env.example to .env and fill it in."
             )
 
+        provider = (os.getenv("LLM_PROVIDER") or "deepseek").strip().lower()
+
+        # DeepSeek key preferred; OPENAI_API_KEY kept as generic alias
+        api_key = (
+            os.getenv("DEEPSEEK_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or ""
+        )
+
+        default_base = DEEPSEEK_DEFAULT_BASE_URL
+        default_model = DEEPSEEK_DEFAULT_MODEL
+        if provider == "openrouter":
+            default_base = "https://openrouter.ai/api/v1"
+            default_model = "deepseek/deepseek-chat"
+        elif provider == "openai":
+            default_base = "https://api.openai.com/v1"
+            default_model = "gpt-4o-mini"
+        elif provider in {"deepseek", "cloud"}:
+            default_base = DEEPSEEK_DEFAULT_BASE_URL
+            default_model = DEEPSEEK_DEFAULT_MODEL
+
+        temperature = _env_float(
+            "LLM_TEMPERATURE",
+            _env_float("OLLAMA_TEMPERATURE", 0.2),
+        )
+
         return cls(
             jira_base_url=base_url,
             jira_username=os.getenv("JIRA_USERNAME", ""),
@@ -122,19 +159,17 @@ class Settings:
             jira_timeout_seconds=_env_float("JIRA_TIMEOUT_SECONDS", 60.0),
             jira_project_keys=_parse_project_keys(os.getenv("JIRA_PROJECT_KEYS")),
             assets_object_schema_id=_env_int("ASSETS_OBJECT_SCHEMA_ID", 8),
-            llm_provider=(os.getenv("LLM_PROVIDER") or "ollama").strip().lower(),
+            llm_provider=provider,
+            llm_temperature=temperature,
             ollama_base_url=(os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434").rstrip(
                 "/"
             ),
             ollama_model=os.getenv("OLLAMA_MODEL", "qwen2.5:7b"),
-            ollama_temperature=_env_float("OLLAMA_TEMPERATURE", 0.2),
             ollama_num_ctx=_env_int("OLLAMA_NUM_CTX", 8192),
             ollama_timeout_seconds=_env_float("OLLAMA_TIMEOUT_SECONDS", 180.0),
-            openai_api_key=os.getenv("OPENAI_API_KEY", ""),
-            openai_base_url=(
-                os.getenv("OPENAI_BASE_URL") or "https://api.openai.com/v1"
-            ).rstrip("/"),
-            openai_model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            openai_api_key=api_key,
+            openai_base_url=(os.getenv("OPENAI_BASE_URL") or default_base).rstrip("/"),
+            openai_model=os.getenv("OPENAI_MODEL", default_model),
             openai_org_id=os.getenv("OPENAI_ORG_ID", ""),
             openai_timeout_seconds=_env_float("OPENAI_TIMEOUT_SECONDS", 120.0),
             agent_max_tool_rounds=_env_int("AGENT_MAX_TOOL_ROUNDS", 8),

@@ -21,7 +21,7 @@ from jira_agent.tools import ToolRegistry
 
 app = typer.Typer(
     name="jira-agent",
-    help="AI-агент Jira Data Center: задачи и Insight/Assets (Ollama или облачные LLM).",
+    help="AI-агент Jira Data Center: задачи и Insight/Assets (DeepSeek Cloud по умолчанию).",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -56,12 +56,12 @@ def chat_cmd(
         None,
         "--model",
         "-m",
-        help="Имя модели (Ollama или OpenAI-compatible)",
+        help="Имя модели (по умолчанию deepseek-chat)",
     ),
     provider: Optional[str] = typer.Option(
         None,
         "--provider",
-        help="ollama | openai (переопределяет LLM_PROVIDER)",
+        help="deepseek | openai | ollama (переопределяет LLM_PROVIDER)",
     ),
     show_tools: bool = typer.Option(
         False,
@@ -269,7 +269,7 @@ def schema_cmd(
 
 @app.command("doctor")
 def doctor_cmd() -> None:
-    """Проверка связности Jira и LLM (Ollama / cloud)."""
+    """Проверка связности Jira и LLM (DeepSeek / cloud / Ollama)."""
     settings = _load_settings()
     ok = True
 
@@ -292,7 +292,11 @@ def doctor_cmd() -> None:
                 console.print(f"  [green]OK[/green] Ollama / {settings.ollama_model}")
         else:
             console.print(f"  URL: {settings.openai_base_url}")
-            console.print(f"  [green]OK[/green] cloud / {settings.openai_model}")
+            key_set = bool(settings.openai_api_key)
+            console.print(f"  API key: {'set' if key_set else '[red]MISSING[/red]'}")
+            console.print(
+                f"  [green]OK[/green] {llm.provider_name} / {settings.openai_model}"
+            )
     except Exception as exc:  # noqa: BLE001
         console.print(f"  [red]FAIL[/red] {exc}")
         ok = False

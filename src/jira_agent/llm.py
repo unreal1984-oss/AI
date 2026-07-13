@@ -37,12 +37,12 @@ class LLMClient(Protocol):
 
 
 def create_llm_client(settings: Settings) -> LLMClient:
-    provider = (settings.llm_provider or "ollama").strip().lower()
+    provider = (settings.llm_provider or "deepseek").strip().lower()
     if provider in {"ollama", "local"}:
         return OllamaClient(settings)
     if provider in {"openai", "openai_compatible", "cloud", "openrouter", "deepseek"}:
         return OpenAICompatibleClient(settings)
     raise ValueError(
         f"Unknown LLM_PROVIDER={settings.llm_provider!r}. "
-        "Use: ollama | openai (OpenAI-compatible cloud)."
+        "Use: deepseek | openai | ollama."
     )

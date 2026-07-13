@@ -2,7 +2,7 @@
 
 AI-агент для **Jira Data Center**: отвечает на вопросы по **задачам** и **Insight/Assets** в указанных проектах.
 
-LLM: **локальный Ollama** или **облачные модели** через OpenAI-compatible API (OpenAI, OpenRouter, DeepSeek, Groq и т.д.).
+LLM по умолчанию: **DeepSeek Cloud** (`https://api.deepseek.com`, модель `deepseek-chat`). Опционально — OpenAI / OpenRouter / локальный Ollama.
 
 ## Структура проекта
 
@@ -24,9 +24,9 @@ LLM: **локальный Ollama** или **облачные модели** че
 │       ├── cli.py            # CLI (typer)
 │       ├── config.py         # настройки из .env
 │       ├── jira_client.py    # /rest/api/2/*
-│       ├── llm.py            # фабрика провайдеров (ollama | openai)
-│       ├── ollama_client.py  # локальный Ollama
-│       ├── openai_client.py  # облачный OpenAI-compatible API
+│       ├── llm.py            # фабрика: deepseek | openai | ollama
+│       ├── ollama_client.py  # локальный Ollama (опционально)
+│       ├── openai_client.py  # DeepSeek / OpenAI-compatible cloud
 │       ├── prompts.py
 │       ├── serializers.py
 │       └── tools.py
@@ -35,38 +35,43 @@ LLM: **локальный Ollama** или **облачные модели** че
     └── test_core.py
 ```
 
-## Облачные модели
+## DeepSeek Cloud (по умолчанию)
 
-В `.env`:
+1. Ключ API: https://platform.deepseek.com/api_keys  
+2. В `.env`:
 
 ```env
-LLM_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=gpt-4o-mini
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.deepseek.com
+OPENAI_MODEL=deepseek-chat
 ```
 
-Примеры базовых URL:
+Модели DeepSeek:
+- `deepseek-chat` — основной чат + tool calling (рекомендуется)
+- `deepseek-reasoner` — рассуждения (tool calling ограничен)
 
-| Провайдер | OPENAI_BASE_URL | Пример OPENAI_MODEL |
-|---|---|---|
-| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| OpenRouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` |
-| DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
-| Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+Другие облака (тот же клиент):
 
-Локальный режим (как раньше):
+| Провайдер | LLM_PROVIDER | OPENAI_BASE_URL | OPENAI_MODEL |
+|---|---|---|---|
+| DeepSeek | `deepseek` | `https://api.deepseek.com` | `deepseek-chat` |
+| OpenAI | `openai` | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| OpenRouter | `openrouter` | `https://openrouter.ai/api/v1` | `deepseek/deepseek-chat` |
+
+Локальный Ollama (если нужен):
 
 ```env
 LLM_PROVIDER=ollama
 OLLAMA_MODEL=qwen2.5:7b
 ```
 
-Переключение без правки `.env`:
+Запуск:
 
-```bash
-jira-agent chat --provider openai -m gpt-4o-mini -p ITSM
-jira-agent ask "Открытые задачи" --provider ollama -m qwen2.5:7b
+```powershell
+.\jira-agent.cmd doctor
+.\jira-agent.cmd chat -p ITSM
+.\jira-agent.cmd ask "Открытые задачи ITSM" -m deepseek-chat
 ```
 
 ## Используемые эндпоинты
@@ -85,7 +90,7 @@ jira-agent ask "Открытые задачи" --provider ollama -m qwen2.5:7b
 
 Только лёгкий стек, **без LangChain / LlamaIndex / pydantic**:
 
-- `httpx` — HTTP к Jira и Ollama  
+- `httpx` — HTTP к Jira и DeepSeek/Ollama  
 - `python-dotenv` — конфиг из `.env`  
 - `typer` + `click` + `rich` — CLI  
 - `tenacity` — ретраи транспорта  
@@ -153,66 +158,41 @@ PYTHONPATH=src python -m jira_agent doctor
 JIRA_BASE_URL=https://your-jira.example.com
 JIRA_USERNAME=your.user
 JIRA_PASSWORD=your-password-or-api-token
-# либо вместо Basic:
-# JIRA_PAT=your-personal-access-token
-
 JIRA_PROJECT_KEYS=ITSM,PROJ
 ASSETS_OBJECT_SCHEMA_ID=8
 
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen2.5:7b
-```
-
-### Рекомендуемые локальные модели Ollama
-
-Для **tool calling** лучше всего:
-
-- `qwen2.5:7b` (по умолчанию)
-- `qwen2.5-coder:latest`
-- `llama3.1:latest`
-
-Также подходят для ответов (tool calling слабее): `llama3.2:latest`, `gpt-oss:20b`, `DeepSeek-Coder-V2:latest`, `kimi-k2.7-code:cloud`.
-
-Смена модели:
-
-```bash
-jira-agent chat -m qwen2.5-coder:latest
-# или
-OLLAMA_MODEL=llama3.1:latest jira-agent ask "Открытые задачи ITSM"
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.deepseek.com
+OPENAI_MODEL=deepseek-chat
 ```
 
 ## Команды
 
-```bash
-# Проверка Jira + Assets + Ollama
-jira-agent doctor
+```powershell
+# Проверка Jira + Assets + DeepSeek
+.\jira-agent.cmd doctor
 
 # Интерактивный чат
-jira-agent chat -p ITSM,PROJ
+.\jira-agent.cmd chat -p ITSM,PROJ
 
 # Один вопрос
-jira-agent ask "Какие открытые задачи в ITSM и какие активы с ними связаны?" -p ITSM
+.\jira-agent.cmd ask "Какие открытые задачи в ITSM и какие активы с ними связаны?" -p ITSM
 
 # Прямые запросы без LLM
-jira-agent projects
-jira-agent issues -p ITSM --jql 'status != Done' -n 30
-jira-agent schema
-jira-agent assets --projects ITSM
-jira-agent assets --aql 'objectSchemaId = 8 AND Name LIKE "srv"'
-jira-agent assets --iql 'Name LIKE "srv"'
-jira-agent asset 12345 --tickets
+.\jira-agent.cmd projects
+.\jira-agent.cmd issues -p ITSM --jql "status != Done" -n 30
+.\jira-agent.cmd schema
+.\jira-agent.cmd assets --projects ITSM
+.\jira-agent.cmd asset 12345 --tickets
 ```
 
-Либо через модуль:
-
-```bash
-python -m jira_agent doctor
-```
+Либо: `python run.py doctor`
 
 ## Как работает агент
 
 1. Пользователь задаёт вопрос.  
-2. Ollama получает system prompt + список tools (OpenAI-compatible).  
+2. DeepSeek Cloud получает system prompt + список tools (OpenAI-compatible).  
 3. Модель вызывает инструменты (`search_issues`, `search_assets_aql`, …).  
 4. Клиенты ходят в Jira DC по указанным REST API.  
 5. Результаты сжимаются сериализаторами и возвращаются модели.  

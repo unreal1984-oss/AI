@@ -31,7 +31,10 @@ class OpenAICompatibleClient:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         if not settings.openai_api_key:
-            raise ValueError("OPENAI_API_KEY is required when LLM_PROVIDER=openai")
+            raise ValueError(
+                "DEEPSEEK_API_KEY (or OPENAI_API_KEY) is required for cloud LLM. "
+                "Get a key at https://platform.deepseek.com/api_keys"
+            )
         base = settings.openai_base_url.rstrip("/")
         headers = {
             "Authorization": f"Bearer {settings.openai_api_key}",
@@ -39,7 +42,6 @@ class OpenAICompatibleClient:
         }
         if settings.openai_org_id:
             headers["OpenAI-Organization"] = settings.openai_org_id
-        # OpenRouter optional headers
         if "openrouter.ai" in base:
             headers.setdefault("HTTP-Referer", "https://github.com/jira-dc-agent")
             headers.setdefault("X-Title", "Jira DC Agent")
@@ -52,6 +54,11 @@ class OpenAICompatibleClient:
 
     @property
     def provider_name(self) -> str:
+        base = self.settings.openai_base_url.lower()
+        if "deepseek" in base or self.settings.llm_provider == "deepseek":
+            return "deepseek"
+        if "openrouter" in base:
+            return "openrouter"
         return "openai"
 
     @property
@@ -93,7 +100,7 @@ class OpenAICompatibleClient:
         payload: dict[str, Any] = {
             "model": model or self.settings.openai_model,
             "messages": [_to_openai_message(m) for m in messages],
-            "temperature": self.settings.ollama_temperature,
+            "temperature": self.settings.llm_temperature,
         }
         if tools:
             payload["tools"] = tools

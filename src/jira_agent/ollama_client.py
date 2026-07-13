@@ -71,7 +71,7 @@ class OllamaClient:
             "messages": [_to_ollama_message(m) for m in messages],
             "stream": False,
             "options": {
-                "temperature": self.settings.ollama_temperature,
+                "temperature": self.settings.llm_temperature,
                 "num_ctx": self.settings.ollama_num_ctx,
             },
         }
