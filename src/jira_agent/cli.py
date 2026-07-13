@@ -332,25 +332,59 @@ def doctor_cmd() -> None:
     console.print("[bold]Jira[/bold]")
     try:
         with JiraClient(settings) as jira:
+            me = jira.myself()
             projects = jira.list_projects()
         console.print(f"  URL: {settings.jira_base_url}")
+        console.print(
+            f"  user: {me.get('displayName') or me.get('name') or me.get('key')} "
+            f"<{me.get('emailAddress') or ''}>"
+        )
+        auth_mode = (
+            "Basic(username+password)"
+            if settings.jira_username and settings.jira_password
+            else "Basic(username+PAT)"
+            if settings.jira_username and settings.jira_pat
+            else "Bearer PAT"
+            if settings.jira_pat
+            else "unknown"
+        )
+        console.print(f"  auth: {auth_mode}")
         console.print(f"  projects: {len(projects)}")
-        console.print("  [green]OK[/green] /rest/api/2/project")
+        if len(projects) == 0:
+            console.print(
+                "  [yellow]WARN[/yellow] 0 projects — проверьте Browse Projects "
+                "или что учётная запись не сервисная без прав"
+            )
+        console.print("  [green]OK[/green] /rest/api/2/myself + /project")
     except Exception as exc:  # noqa: BLE001
         console.print(f"  [red]FAIL[/red] {exc}")
         ok = False
 
     console.print("[bold]Assets[/bold]")
     try:
+        # Force Basic-friendly credentials check early
+        _ = settings.assets_basic_auth()
         with AssetsClient(settings) as assets:
             schema = assets.get_object_schema()
+            used = assets.api_prefix
         console.print(
             f"  schema {settings.assets_object_schema_id}: "
             f"{schema.get('name') or schema.get('id')}"
         )
-        console.print("  [green]OK[/green] /rest/assets/1.0/objectschema/{id}")
+        console.print(f"  prefix: {used}")
+        console.print(f"  [green]OK[/green] {used}/objectschema/{{id}}")
     except Exception as exc:  # noqa: BLE001
         console.print(f"  [red]FAIL[/red] {exc}")
+        console.print(
+            "  [dim]Hint: в .env нужны JIRA_USERNAME + JIRA_PASSWORD "
+            "(или USERNAME + JIRA_PAT). Не оставляйте только JIRA_PAT без username — "
+            "Assets на DC часто отвечает 401 на Bearer.[/dim]"
+        )
+        console.print(
+            "  [dim]Также: право на Assets/Insight и схема "
+            f"ASSETS_OBJECT_SCHEMA_ID={settings.assets_object_schema_id}. "
+            "При необходимости ASSETS_API_PREFIX=insight[/dim]"
+        )
         ok = False
 
     raise typer.Exit(code=0 if ok else 2)

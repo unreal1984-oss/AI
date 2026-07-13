@@ -69,6 +69,10 @@ class JiraClient:
         data = self._request("GET", "/rest/api/2/project")
         return list(data or [])
 
+    def myself(self) -> dict[str, Any]:
+        """GET /rest/api/2/myself — who am I authenticated as."""
+        return self._request("GET", "/rest/api/2/myself")
+
     def search_issues(
         self,
         jql: str,

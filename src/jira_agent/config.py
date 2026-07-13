@@ -53,6 +53,8 @@ class Settings:
     jira_project_keys: List[str] = field(default_factory=list)
 
     assets_object_schema_id: int = 8
+    # /rest/assets/1.0 (new) or /rest/insight/1.0 (legacy DC). "auto" tries both.
+    assets_api_prefix: str = "auto"
 
     # LLM provider: deepseek (default) | openai | ollama
     llm_provider: str = "deepseek"
@@ -111,16 +113,46 @@ class Settings:
             "Accept": "application/json",
             "Content-Type": "application/json",
         }
-        if self.jira_pat:
+        # Bearer only when we are NOT also sending Basic for the same request.
+        # Core Jira REST accepts Bearer PAT; Assets/Insight on DC often does not.
+        if self.jira_pat and not self.jira_username:
             headers["Authorization"] = f"Bearer {self.jira_pat}"
         return headers
 
     def basic_auth(self) -> tuple[str, str] | None:
+        """Auth for Jira core REST."""
+        if self.jira_username and self.jira_password:
+            return (self.jira_username, self.jira_password)
+        if self.jira_username and self.jira_pat:
+            # DC: PAT can be used as Basic password
+            return (self.jira_username, self.jira_pat)
         if self.jira_pat:
-            return None
+            return None  # Bearer via auth_headers
         if not self.jira_username:
-            raise ValueError("Set JIRA_USERNAME+JIRA_PASSWORD or JIRA_PAT")
+            raise ValueError("Set JIRA_USERNAME+JIRA_PASSWORD (or JIRA_USERNAME+JIRA_PAT)")
         return (self.jira_username, self.jira_password)
+
+    def assets_auth_headers(self) -> dict[str, str]:
+        """Assets/Insight: never send Bearer — plugin often returns 401 on Bearer PAT."""
+        return {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+    def assets_basic_auth(self) -> tuple[str, str]:
+        """
+        Assets/Insight on Jira DC typically requires HTTP Basic.
+        Prefer username+password; else username+PAT-as-password.
+        """
+        if self.jira_username and self.jira_password:
+            return (self.jira_username, self.jira_password)
+        if self.jira_username and self.jira_pat:
+            return (self.jira_username, self.jira_pat)
+        raise ValueError(
+            "Assets/Insight needs Basic auth: set JIRA_USERNAME and "
+            "JIRA_PASSWORD (or JIRA_USERNAME + JIRA_PAT). "
+            "Bearer-only JIRA_PAT without username often gives HTTP 401 on Assets."
+        )
 
     @classmethod
     def from_env(cls, env_file: str | Path | None = ".env") -> "Settings":
@@ -167,6 +199,7 @@ class Settings:
             jira_timeout_seconds=_env_float("JIRA_TIMEOUT_SECONDS", 60.0),
             jira_project_keys=_parse_project_keys(os.getenv("JIRA_PROJECT_KEYS")),
             assets_object_schema_id=_env_int("ASSETS_OBJECT_SCHEMA_ID", 8),
+            assets_api_prefix=(os.getenv("ASSETS_API_PREFIX") or "auto").strip().lower(),
             llm_provider=provider,
             llm_temperature=temperature,
             ollama_base_url=(os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434").rstrip(

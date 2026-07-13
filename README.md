@@ -356,7 +356,32 @@ LLM_CA_BUNDLE=C:\certs\corp-root-ca.pem
 JIRA_VERIFY_SSL=true
 ```
 
-### `CERTIFICATE_VERIFY_FAILED` / self-signed certificate in certificate chain
+### Assets `401 Unauthorized`
+
+На Jira DC плагин Assets/Insight часто **не принимает Bearer PAT**.
+
+В `.env` используйте Basic:
+
+```env
+JIRA_USERNAME=your.user
+JIRA_PASSWORD=your-password
+# либо пароль = PAT:
+# JIRA_PAT=your-pat
+# (USERNAME обязателен)
+
+JIRA_VERIFY_SSL=false
+ASSETS_OBJECT_SCHEMA_ID=8
+ASSETS_API_PREFIX=auto
+```
+
+Проверка:
+
+```powershell
+.\jira-agent.cmd doctor --insecure
+```
+
+Если Jira OK, а Assets 401 — у пользователя нет доступа к Assets/Insight или неверный логин.  
+`projects: 0` при OK значит учётка видит API, но без Browse Projects (или пустой стенд).
 
 В `.env` добавьте `LLM_VERIFY_SSL=false`, перезапустите чат:
 
