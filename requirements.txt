@@ -1,7 +1,6 @@
-# Pinned, conflict-free stack for Python 3.11+
+# Conflict-free stack — NO pydantic (avoids Rust/pydantic-core build on Windows/Py3.14)
+# Supported: Python 3.11, 3.12, 3.13, 3.14 (CPython)
 httpx==0.28.1
-pydantic==2.10.6
-pydantic-settings==2.7.1
 python-dotenv==1.0.1
 typer==0.15.1
 click==8.1.8

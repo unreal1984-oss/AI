@@ -107,8 +107,11 @@ def test_tool_schemas_cover_required_endpoints() -> None:
     } <= names
 
 
-def test_parse_project_keys_from_env(settings: Settings) -> None:
+def test_parse_project_keys_from_env() -> None:
+    get_settings.cache_clear()
+    settings = Settings.from_env(env_file=None)
     assert "ITSM" in settings.jira_project_keys
+    assert "DEMO" in settings.jira_project_keys
 
 
 def test_jira_list_projects(settings: Settings) -> None:

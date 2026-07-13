@@ -45,19 +45,44 @@
 
 ## Зависимости (без конфликтов)
 
-Только лёгкий стек, **без LangChain / LlamaIndex**:
+Только лёгкий стек, **без LangChain / LlamaIndex / pydantic**:
 
 - `httpx` — HTTP к Jira и Ollama  
-- `pydantic` + `pydantic-settings` — конфиг  
-- `typer` + `rich` — CLI  
+- `python-dotenv` — конфиг из `.env`  
+- `typer` + `click` + `rich` — CLI  
 - `tenacity` — ретраи транспорта  
 - `pytest` + `respx` — тесты  
 
-Версии зафиксированы в `requirements.txt`.
+Версии зафиксированы в `requirements.txt`. На Windows/Python 3.14 **нет** сборки Rust (`pydantic-core`).
 
 ## Установка
 
 Пакет лежит в `src/jira_agent` — его нужно поставить в venv (иначе будет `ModuleNotFoundError: No module named 'jira_agent'`).
+
+### Windows (PowerShell)
+
+```powershell
+python --version
+# если 3.14 — ок (после удаления pydantic). При проблемах поставьте 3.12 с python.org
+
+.\scripts\bootstrap.ps1
+copy .env.example .env
+.\.venv\Scripts\Activate.ps1
+jira-agent doctor
+```
+
+Или вручную:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+pip install -r requirements.txt
+pip install -e .
+python -c "from jira_agent.cli import app; print('ok')"
+```
+
+### Linux / macOS
 
 ```bash
 chmod +x scripts/bootstrap.sh
@@ -174,23 +199,35 @@ pytest -q
 
 ## Troubleshooting
 
+### `Preparing metadata (pyproject.toml) ... error` / `SOABI: cp314-win_amd64` / `rustc`
+
+Это была сборка **pydantic-core** (Rust) под Python 3.14 на Windows. В текущей версии агента **pydantic удалён**.
+
+Обновите код и поставьте зависимости заново:
+
+```powershell
+git pull
+Remove-Item -Recurse -Force .venv -ErrorAction SilentlyContinue
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
+pip install -r requirements.txt
+pip install -e .
+```
+
+Если всё ещё тянется старый `requirements.txt` с pydantic — убедитесь, что в файле **нет** строк `pydantic` / `pydantic-settings`.
+
 ### `ModuleNotFoundError: No module named 'jira_agent'`
 
 Значит используется Python, куда пакет не установлен. Исправление:
 
-```bash
-# из корня репозитория
-source .venv/bin/activate   # если venv ещё нет — ./scripts/bootstrap.sh
+```powershell
+.\.venv\Scripts\Activate.ps1
 pip install -e .
-which python                # должен указывать на .../AI/.venv/bin/python
 python -c "from jira_agent.cli import app; print('ok')"
 ```
 
-Либо без установки:
-
-```bash
-python run.py chat -p ITSM
-```
+Или без установки: `python run.py chat -p ITSM`
 
 ## SSL / корпоративный Jira
 
