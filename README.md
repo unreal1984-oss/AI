@@ -272,12 +272,31 @@ python -c "from jira_agent.cli import app; print('ok')"
 
 Или без установки: `.\jira-agent.cmd chat -p ITSM`
 
-## SSL / корпоративный Jira
+## SSL / корпоративный Jira / DeepSeek
 
-Если сертификат самоподписанный:
+Если сертификат самоподписанный (часто корпоративный SSL-inspection):
 
 ```env
+# Jira
 JIRA_VERIFY_SSL=false
+
+# DeepSeek / cloud LLM
+LLM_VERIFY_SSL=false
+```
+
+Лучше указать корпоративный CA, чем отключать проверку:
+
+```env
+LLM_CA_BUNDLE=C:\certs\corp-root-ca.pem
+JIRA_VERIFY_SSL=true
+```
+
+### `CERTIFICATE_VERIFY_FAILED` / self-signed certificate in certificate chain
+
+В `.env` добавьте `LLM_VERIFY_SSL=false`, перезапустите чат:
+
+```powershell
+.\jira-agent.cmd chat -p ITSM
 ```
 
 ## Лицензия

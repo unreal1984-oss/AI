@@ -21,6 +21,7 @@ class OllamaClient:
         self._client = httpx.Client(
             base_url=settings.ollama_base_url.rstrip("/"),
             timeout=settings.ollama_timeout_seconds,
+            verify=settings.llm_http_verify(),
         )
 
     @property

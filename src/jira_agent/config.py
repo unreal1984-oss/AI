@@ -70,6 +70,9 @@ class Settings:
     openai_model: str = DEEPSEEK_DEFAULT_MODEL
     openai_org_id: str = ""
     openai_timeout_seconds: float = 120.0
+    # Corporate SSL inspection / self-signed MITM proxy
+    llm_verify_ssl: bool = True
+    llm_ca_bundle: str = ""
 
     agent_max_tool_rounds: int = 8
     agent_max_issues: int = 50
@@ -96,6 +99,12 @@ class Settings:
             self.openai_model = model
         else:
             self.ollama_model = model
+
+    def llm_http_verify(self) -> bool | str:
+        """Value for httpx Client(verify=...)."""
+        if self.llm_ca_bundle.strip():
+            return self.llm_ca_bundle.strip()
+        return self.llm_verify_ssl
 
     def auth_headers(self) -> dict[str, str]:
         headers = {
@@ -172,6 +181,8 @@ class Settings:
             openai_model=os.getenv("OPENAI_MODEL", default_model),
             openai_org_id=os.getenv("OPENAI_ORG_ID", ""),
             openai_timeout_seconds=_env_float("OPENAI_TIMEOUT_SECONDS", 120.0),
+            llm_verify_ssl=_env_bool("LLM_VERIFY_SSL", True),
+            llm_ca_bundle=(os.getenv("LLM_CA_BUNDLE") or "").strip(),
             agent_max_tool_rounds=_env_int("AGENT_MAX_TOOL_ROUNDS", 8),
             agent_max_issues=_env_int("AGENT_MAX_ISSUES", 50),
             agent_max_assets=_env_int("AGENT_MAX_ASSETS", 50),

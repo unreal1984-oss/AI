@@ -50,6 +50,7 @@ class OpenAICompatibleClient:
             base_url=base,
             headers=headers,
             timeout=settings.openai_timeout_seconds,
+            verify=settings.llm_http_verify(),
         )
 
     @property
