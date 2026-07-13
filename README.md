@@ -1,6 +1,8 @@
-# Jira Data Center AI Agent (Ollama)
+# Jira Data Center AI Agent
 
-Локальный AI-агент для **Jira Data Center**: отвечает на вопросы по **задачам** и **Insight/Assets** в указанных проектах. LLM — **Ollama** на вашей машине (без облачных API).
+AI-агент для **Jira Data Center**: отвечает на вопросы по **задачам** и **Insight/Assets** в указанных проектах.
+
+LLM: **локальный Ollama** или **облачные модели** через OpenAI-compatible API (OpenAI, OpenRouter, DeepSeek, Groq и т.д.).
 
 ## Структура проекта
 
@@ -22,13 +24,49 @@
 │       ├── cli.py            # CLI (typer)
 │       ├── config.py         # настройки из .env
 │       ├── jira_client.py    # /rest/api/2/*
-│       ├── ollama_client.py  # /api/chat, /api/tags
+│       ├── llm.py            # фабрика провайдеров (ollama | openai)
+│       ├── ollama_client.py  # локальный Ollama
+│       ├── openai_client.py  # облачный OpenAI-compatible API
 │       ├── prompts.py
-│       ├── serializers.py    # компактный JSON для контекста модели
-│       └── tools.py          # инструменты агента
+│       ├── serializers.py
+│       └── tools.py
 └── tests/
     ├── test_agent.py
     └── test_core.py
+```
+
+## Облачные модели
+
+В `.env`:
+
+```env
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Примеры базовых URL:
+
+| Провайдер | OPENAI_BASE_URL | Пример OPENAI_MODEL |
+|---|---|---|
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini` |
+| DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
+| Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
+
+Локальный режим (как раньше):
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen2.5:7b
+```
+
+Переключение без правки `.env`:
+
+```bash
+jira-agent chat --provider openai -m gpt-4o-mini -p ITSM
+jira-agent ask "Открытые задачи" --provider ollama -m qwen2.5:7b
 ```
 
 ## Используемые эндпоинты

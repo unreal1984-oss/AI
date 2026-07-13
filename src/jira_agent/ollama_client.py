@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 import httpx
@@ -21,6 +22,14 @@ class OllamaClient:
             base_url=settings.ollama_base_url.rstrip("/"),
             timeout=settings.ollama_timeout_seconds,
         )
+
+    @property
+    def provider_name(self) -> str:
+        return "ollama"
+
+    @property
+    def model_name(self) -> str:
+        return self.settings.ollama_model
 
     def close(self) -> None:
         self._client.close()
@@ -54,12 +63,12 @@ class OllamaClient:
         """
         POST /api/chat
 
-        Returns the assistant message dict:
+        Returns normalized assistant message:
           {role, content, tool_calls?}
         """
         payload: dict[str, Any] = {
             "model": model or self.settings.ollama_model,
-            "messages": messages,
+            "messages": [_to_ollama_message(m) for m in messages],
             "stream": False,
             "options": {
                 "temperature": self.settings.ollama_temperature,
@@ -78,4 +87,45 @@ class OllamaClient:
         message = data.get("message")
         if not isinstance(message, dict):
             raise OllamaError(f"Unexpected Ollama response: {data!r}")
-        return message
+        return _normalize_ollama_assistant(message)
+
+
+def _to_ollama_message(message: dict[str, Any]) -> dict[str, Any]:
+    role = message.get("role")
+    if role == "tool":
+        out: dict[str, Any] = {
+            "role": "tool",
+            "content": message.get("content") or "",
+        }
+        name = message.get("tool_name") or message.get("name")
+        if name:
+            out["tool_name"] = name
+        return out
+    # Pass through assistant/user/system (including tool_calls)
+    return dict(message)
+
+
+def _normalize_ollama_assistant(message: dict[str, Any]) -> dict[str, Any]:
+    tool_calls = message.get("tool_calls") or []
+    normalized = []
+    for call in tool_calls:
+        fn = call.get("function") or {}
+        normalized.append(
+            {
+                "id": call.get("id") or f"call_{uuid.uuid4().hex[:8]}",
+                "type": "function",
+                "function": {
+                    "name": fn.get("name") or call.get("name") or "",
+                    "arguments": fn.get("arguments")
+                    if fn.get("arguments") is not None
+                    else {},
+                },
+            }
+        )
+    result: dict[str, Any] = {
+        "role": "assistant",
+        "content": message.get("content") or "",
+    }
+    if normalized:
+        result["tool_calls"] = normalized
+    return result

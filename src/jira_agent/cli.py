@@ -16,12 +16,12 @@ from jira_agent.agent import JiraAgent
 from jira_agent.assets_client import AssetsClient
 from jira_agent.config import Settings, get_settings
 from jira_agent.jira_client import JiraClient
-from jira_agent.ollama_client import OllamaClient
+from jira_agent.llm import create_llm_client
 from jira_agent.tools import ToolRegistry
 
 app = typer.Typer(
     name="jira-agent",
-    help="AI-агент Jira Data Center: задачи и Insight/Assets через локальный Ollama.",
+    help="AI-агент Jira Data Center: задачи и Insight/Assets (Ollama или облачные LLM).",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -30,7 +30,6 @@ console = Console()
 
 def _load_settings() -> Settings:
     try:
-        # Drop cache so CLI flags / fresh .env are respected in long-lived processes
         get_settings.cache_clear()
         return get_settings()
     except Exception as exc:  # noqa: BLE001
@@ -57,7 +56,12 @@ def chat_cmd(
         None,
         "--model",
         "-m",
-        help="Ollama модель (по умолчанию из .env)",
+        help="Имя модели (Ollama или OpenAI-compatible)",
+    ),
+    provider: Optional[str] = typer.Option(
+        None,
+        "--provider",
+        help="ollama | openai (переопределяет LLM_PROVIDER)",
     ),
     show_tools: bool = typer.Option(
         False,
@@ -67,8 +71,10 @@ def chat_cmd(
 ) -> None:
     """Интерактивный чат с агентом."""
     settings = _load_settings()
+    if provider:
+        settings.llm_provider = provider.strip().lower()
     if model:
-        settings.ollama_model = model
+        settings.set_active_model(model)
     project_keys = _parse_projects(projects, settings)
 
     console.print(
@@ -77,7 +83,7 @@ def chat_cmd(
             f"Jira: {settings.jira_base_url}\n"
             f"Projects: {', '.join(project_keys) or '—'}\n"
             f"Assets schema: {settings.assets_object_schema_id}\n"
-            f"Ollama: {settings.ollama_base_url} / {settings.ollama_model}\n"
+            f"LLM: {settings.llm_provider} / {settings.active_model}\n"
             f"Выход: /exit  |  сброс: /reset",
             title="chat",
         )
@@ -86,10 +92,10 @@ def chat_cmd(
     with (
         JiraClient(settings) as jira,
         AssetsClient(settings) as assets,
-        OllamaClient(settings) as ollama,
+        create_llm_client(settings) as llm,
     ):
         tools = ToolRegistry(settings, jira, assets, default_project_keys=project_keys)
-        agent = JiraAgent(settings, ollama, tools, project_keys=project_keys)
+        agent = JiraAgent(settings, llm, tools, project_keys=project_keys)
 
         while True:
             try:
@@ -133,21 +139,24 @@ def ask_cmd(
     question: str = typer.Argument(..., help="Вопрос агенту"),
     projects: Optional[str] = typer.Option(None, "--projects", "-p"),
     model: Optional[str] = typer.Option(None, "--model", "-m"),
+    provider: Optional[str] = typer.Option(None, "--provider"),
     json_out: bool = typer.Option(False, "--json", help="Вывести JSON с ответом"),
 ) -> None:
     """Один вопрос без интерактива."""
     settings = _load_settings()
+    if provider:
+        settings.llm_provider = provider.strip().lower()
     if model:
-        settings.ollama_model = model
+        settings.set_active_model(model)
     project_keys = _parse_projects(projects, settings)
 
     with (
         JiraClient(settings) as jira,
         AssetsClient(settings) as assets,
-        OllamaClient(settings) as ollama,
+        create_llm_client(settings) as llm,
     ):
         tools = ToolRegistry(settings, jira, assets, default_project_keys=project_keys)
-        agent = JiraAgent(settings, ollama, tools, project_keys=project_keys)
+        agent = JiraAgent(settings, llm, tools, project_keys=project_keys)
         result = agent.ask(question)
 
     if json_out:
@@ -155,6 +164,8 @@ def ask_cmd(
             data={
                 "answer": result.answer,
                 "tool_calls": result.tool_calls,
+                "provider": settings.llm_provider,
+                "model": settings.active_model,
             }
         )
     else:
@@ -258,25 +269,30 @@ def schema_cmd(
 
 @app.command("doctor")
 def doctor_cmd() -> None:
-    """Проверка связности Jira и Ollama."""
+    """Проверка связности Jira и LLM (Ollama / cloud)."""
     settings = _load_settings()
     ok = True
 
-    console.print("[bold]Ollama[/bold]")
+    console.print(f"[bold]LLM[/bold] provider={settings.llm_provider}")
     try:
-        with OllamaClient(settings) as ollama:
-            models = ollama.list_models()
-        console.print(f"  URL: {settings.ollama_base_url}")
-        console.print(f"  models: {', '.join(models) or '(пусто)'}")
-        if settings.ollama_model not in models and not any(
-            m.startswith(settings.ollama_model.split(":")[0]) for m in models
-        ):
-            console.print(
-                f"  [yellow]Модель {settings.ollama_model} не найдена в /api/tags[/yellow]"
-            )
-            ok = False
+        with create_llm_client(settings) as llm:
+            models = llm.list_models()
+        console.print(f"  model: {settings.active_model}")
+        if settings.llm_provider in {"ollama", "local"}:
+            console.print(f"  URL: {settings.ollama_base_url}")
+            console.print(f"  models: {', '.join(models[:20]) or '(пусто)'}")
+            if settings.ollama_model not in models and not any(
+                m.startswith(settings.ollama_model.split(":")[0]) for m in models
+            ):
+                console.print(
+                    f"  [yellow]Модель {settings.ollama_model} не найдена в /api/tags[/yellow]"
+                )
+                ok = False
+            else:
+                console.print(f"  [green]OK[/green] Ollama / {settings.ollama_model}")
         else:
-            console.print(f"  [green]OK[/green] модель {settings.ollama_model}")
+            console.print(f"  URL: {settings.openai_base_url}")
+            console.print(f"  [green]OK[/green] cloud / {settings.openai_model}")
     except Exception as exc:  # noqa: BLE001
         console.print(f"  [red]FAIL[/red] {exc}")
         ok = False

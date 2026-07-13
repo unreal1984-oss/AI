@@ -1,4 +1,4 @@
-"""ReAct-style agent loop over Ollama tool calling."""
+"""ReAct-style agent loop over LLM tool calling (Ollama or cloud)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from jira_agent.config import Settings
-from jira_agent.ollama_client import OllamaClient
+from jira_agent.llm import LLMClient
 from jira_agent.prompts import build_system_prompt
 from jira_agent.tools import ToolRegistry, ollama_tool_schemas
 
@@ -33,13 +33,13 @@ class JiraAgent:
     def __init__(
         self,
         settings: Settings,
-        ollama: OllamaClient,
+        llm: LLMClient,
         tools: ToolRegistry,
         *,
         project_keys: list[str] | None = None,
     ) -> None:
         self.settings = settings
-        self.ollama = ollama
+        self.llm = llm
         self.tools = tools
         self.project_keys = project_keys or list(settings.jira_project_keys)
         self.messages: list[dict[str, Any]] = [
@@ -49,7 +49,7 @@ class JiraAgent:
                     language=settings.agent_language,
                     project_keys=self.project_keys,
                     schema_id=settings.assets_object_schema_id,
-                    model=settings.ollama_model,
+                    model=f"{llm.provider_name}/{llm.model_name}",
                 ),
             }
         ]
@@ -67,9 +67,11 @@ class JiraAgent:
 
         for _round in range(self.settings.agent_max_tool_rounds):
             if on_progress:
-                on_progress(f"Ollama ({self.settings.ollama_model}) думает…")
+                on_progress(
+                    f"{self.llm.provider_name} ({self.llm.model_name}) думает…"
+                )
 
-            assistant = self.ollama.chat(self.messages, tools=schemas)
+            assistant = self.llm.chat(self.messages, tools=schemas)
             content = (assistant.get("content") or "").strip()
             raw_tool_calls = assistant.get("tool_calls") or []
 
@@ -86,6 +88,7 @@ class JiraAgent:
                 fn = call.get("function") or {}
                 name = fn.get("name") or call.get("name") or ""
                 arguments = fn.get("arguments")
+                call_id = call.get("id") or f"call_{tool_calls_count}"
                 if on_progress:
                     on_progress(f"Инструмент: {name}({_short_args(arguments)})")
 
@@ -100,7 +103,9 @@ class JiraAgent:
                 self.messages.append(
                     {
                         "role": "tool",
+                        "tool_call_id": call_id,
                         "tool_name": name,
+                        "name": name,
                         "content": result,
                     }
                 )
@@ -117,7 +122,7 @@ class JiraAgent:
                 ),
             }
         )
-        final = self.ollama.chat(self.messages, tools=None)
+        final = self.llm.chat(self.messages, tools=None)
         self.messages.append(final)
         answer = (final.get("content") or "").strip() or "Данных недостаточно для ответа."
         turns.append(AgentTurn(role="assistant", content=answer))
