@@ -7,48 +7,45 @@ AI-агент для **Jira Data Center**: задачи и Insight/Assets по �
 
 ## Cursor (рекомендуется)
 
-У Cursor **нет** публичного `chat/completions` API для сторонних приложений.  
-Поэтому Jira-инструменты подключаются как **MCP-сервер** — Agent в Cursor сам вызывает их своими моделями.
+У Cursor **нет** публичного `chat/completions` API.  
+Jira-инструменты подключаются как **локальный MCP-сервер** — Agent в Cursor вызывает их своими моделями (**DeepSeek не нужен**, баланс DeepSeek не важен).
 
-1. Установите пакет и заполните `.env` (Jira; `DEEPSEEK_API_KEY` не нужен для MCP):
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install -e .
-copy .env.example .env
-# заполните JIRA_* 
-```
-
-2. Скопируйте MCP-конфиг:
+### Быстрый setup (Windows)
 
 ```powershell
-copy .cursor\mcp.json.example .cursor\mcp.json
+git pull
+.\scripts\setup_cursor_mcp.ps1
+notepad .env
 ```
 
-При необходимости укажите полный путь к Python из venv в `.cursor/mcp.json`:
+В `.env` заполните только Jira (пример):
 
-```json
-{
-  "mcpServers": {
-    "jira-dc": {
-      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
-      "args": ["-m", "jira_agent.mcp_server"],
-      "envFile": "${workspaceFolder}/.env",
-      "env": { "PYTHONPATH": "${workspaceFolder}/src" }
-    }
-  }
-}
+```env
+JIRA_BASE_URL=https://stage2-jira.stoloto.su
+JIRA_USERNAME=...
+JIRA_PASSWORD=...
+JIRA_PROJECT_KEYS=NPTN,USA
+ASSETS_OBJECT_SCHEMA_ID=8
+JIRA_VERIFY_SSL=false
 ```
 
-3. В Cursor: **Settings → MCP** — включите `jira-dc`, Reload Window.  
-4. В **Agent** чате спросите, например: «Покажи открытые задачи ITSM и связанные активы».
+`DEEPSEEK_API_KEY` можно оставить пустым.
 
-Проверка MCP без Cursor:
+### Включить в Cursor
+
+1. Откройте **эту папку** как workspace в Cursor  
+2. **Settings → MCP** → сервер `jira-dc` должен быть зелёным / Enabled  
+3. Command Palette → **Reload Window**  
+4. Откройте **Agent** (не `.\jira-agent.cmd chat`) и спросите, например:  
+   «Покажи открытые задачи NPTN и связанные активы»
+
+Важно: `.\jira-agent.cmd chat` = отдельный CLI на DeepSeek (нужен баланс).  
+**MCP в Cursor** = модели Cursor + локальные Jira tools (бесплатно в рамках подписки Cursor).
+
+Проверка MCP без UI:
 
 ```powershell
-python scripts\mcp_smoke.py
+.\.venv\Scripts\python.exe scripts\mcp_smoke.py
 ```
 
 ## Структура проекта

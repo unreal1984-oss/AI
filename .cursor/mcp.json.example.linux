@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "jira-dc": {
-      "command": "${workspaceFolder}/.venv/Scripts/python.exe",
+      "command": "${workspaceFolder}/.venv/bin/python",
       "args": ["-m", "jira_agent.mcp_server"],
       "envFile": "${workspaceFolder}/.env",
       "env": {
