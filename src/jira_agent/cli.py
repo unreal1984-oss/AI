@@ -44,6 +44,21 @@ def _parse_projects(value: Optional[str], settings: Settings) -> list[str]:
     return list(settings.jira_project_keys)
 
 
+def _apply_insecure(settings: Settings, insecure: bool) -> None:
+    if insecure:
+        settings.llm_verify_ssl = False
+        settings.jira_verify_ssl = False
+
+
+def _ssl_label(settings: Settings) -> str:
+    verify = settings.llm_http_verify()
+    if verify is False:
+        return "off (--insecure / LLM_VERIFY_SSL=false)"
+    if isinstance(verify, str):
+        return f"CA bundle: {verify}"
+    return "on"
+
+
 @app.command("chat")
 def chat_cmd(
     projects: Optional[str] = typer.Option(
@@ -63,6 +78,11 @@ def chat_cmd(
         "--provider",
         help="deepseek | openai | ollama (переопределяет LLM_PROVIDER)",
     ),
+    insecure: bool = typer.Option(
+        False,
+        "--insecure",
+        help="Отключить проверку SSL (корпоративный MITM / self-signed)",
+    ),
     show_tools: bool = typer.Option(
         False,
         "--show-tools",
@@ -71,6 +91,7 @@ def chat_cmd(
 ) -> None:
     """Интерактивный чат с агентом."""
     settings = _load_settings()
+    _apply_insecure(settings, insecure)
     if provider:
         settings.llm_provider = provider.strip().lower()
     if model:
@@ -84,6 +105,7 @@ def chat_cmd(
             f"Projects: {', '.join(project_keys) or '—'}\n"
             f"Assets schema: {settings.assets_object_schema_id}\n"
             f"LLM: {settings.llm_provider} / {settings.active_model}\n"
+            f"SSL verify: {_ssl_label(settings)}\n"
             f"Выход: /exit  |  сброс: /reset",
             title="chat",
         )
@@ -140,10 +162,16 @@ def ask_cmd(
     projects: Optional[str] = typer.Option(None, "--projects", "-p"),
     model: Optional[str] = typer.Option(None, "--model", "-m"),
     provider: Optional[str] = typer.Option(None, "--provider"),
+    insecure: bool = typer.Option(
+        False,
+        "--insecure",
+        help="Отключить проверку SSL (корпоративный MITM / self-signed)",
+    ),
     json_out: bool = typer.Option(False, "--json", help="Вывести JSON с ответом"),
 ) -> None:
     """Один вопрос без интерактива."""
     settings = _load_settings()
+    _apply_insecure(settings, insecure)
     if provider:
         settings.llm_provider = provider.strip().lower()
     if model:

@@ -107,7 +107,10 @@ class OpenAICompatibleClient:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
-        response = self._client.post("/chat/completions", json=payload)
+        try:
+            response = self._client.post("/chat/completions", json=payload)
+        except httpx.HTTPError as exc:
+            raise OpenAICompatibleError(_format_transport_error(exc, self.settings)) from exc
         if response.status_code >= 400:
             raise OpenAICompatibleError(
                 _format_api_error(response.status_code, response.text, self.provider_name)
@@ -118,6 +121,20 @@ class OpenAICompatibleClient:
             raise OpenAICompatibleError(f"Unexpected OpenAI response: {data!r}")
         message = choices[0].get("message") or {}
         return _normalize_openai_assistant(message)
+
+
+def _format_transport_error(exc: Exception, settings: Settings) -> str:
+    text = str(exc)
+    if "CERTIFICATE_VERIFY_FAILED" in text or "SSL" in text.upper():
+        return (
+            "SSL ошибка при обращении к LLM (self-signed certificate in chain).\n"
+            "В корпоративной сети добавьте в .env:\n"
+            "  LLM_VERIFY_SSL=false\n"
+            "или запустите: .\\jira-agent.cmd chat --insecure\n"
+            f"Сейчас LLM_VERIFY_SSL={settings.llm_verify_ssl}, "
+            f"LLM_CA_BUNDLE={settings.llm_ca_bundle or '(пусто)'}."
+        )
+    return f"Ошибка сети LLM: {exc}"
 
 
 def _format_api_error(status_code: int, body: str, provider: str) -> str:

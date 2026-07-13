@@ -124,8 +124,7 @@ class Settings:
 
     @classmethod
     def from_env(cls, env_file: str | Path | None = ".env") -> "Settings":
-        if env_file:
-            load_dotenv(env_file, override=False)
+        _load_dotenv_files(env_file)
 
         base_url = (os.getenv("JIRA_BASE_URL") or "").rstrip("/")
         if not base_url:
@@ -193,3 +192,24 @@ class Settings:
 @lru_cache
 def get_settings() -> Settings:
     return Settings.from_env()
+
+
+def _load_dotenv_files(env_file: str | Path | None) -> None:
+    """Load .env from cwd and repo root so CLI works from any launch path."""
+    candidates: list[Path] = []
+    if env_file:
+        candidates.append(Path(env_file))
+    candidates.append(Path.cwd() / ".env")
+    # src/jira_agent/config.py -> repo root
+    repo_root = Path(__file__).resolve().parents[2]
+    candidates.append(repo_root / ".env")
+    seen: set[Path] = set()
+    for path in candidates:
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved in seen or not resolved.is_file():
+            continue
+        seen.add(resolved)
+        load_dotenv(resolved, override=False)
