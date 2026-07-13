@@ -19,7 +19,7 @@ LLM: **локальный Ollama** или **облачные модели** че
 │   └── jira_agent/
 │       ├── __init__.py
 │       ├── __main__.py
-│       ├── agent.py          # цикл tool-calling с Ollama
+│       ├── agent.py          # цикл tool-calling (Ollama / cloud)
 │       ├── assets_client.py  # /rest/assets/1.0/*
 │       ├── cli.py            # CLI (typer)
 │       ├── config.py         # настройки из .env
