@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "jira-dc": {
+      "command": "C:\\Users\\av\\Documents\\deepseek_cursor_ai_agent\\AI-cursor-jira-dc-ollama-agent-d199\\.venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\av\\Documents\\deepseek_cursor_ai_agent\\AI-cursor-jira-dc-ollama-agent-d199\\run_mcp.py"
+      ],
+      "envFile": "C:\\Users\\av\\Documents\\deepseek_cursor_ai_agent\\AI-cursor-jira-dc-ollama-agent-d199\\.env",
+      "env": {
+        "PYTHONUNBUFFERED": "1",
+        "PYTHONPATH": "C:\\Users\\av\\Documents\\deepseek_cursor_ai_agent\\AI-cursor-jira-dc-ollama-agent-d199\\src"
+      }
+    }
+  }
+}
