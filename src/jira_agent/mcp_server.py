@@ -1,7 +1,8 @@
 """Minimal MCP stdio server for Cursor — Jira DC + Assets tools.
 
-Protocol: JSON-RPC 2.0 over stdio with Content-Length framing.
-Clients are created lazily on first tools/call so initialize/tools/list stay fast.
+Supports both:
+  - Content-Length framing (LSP-style)
+  - Newline-delimited JSON (some Cursor/Windows builds)
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from jira_agent.jira_client import JiraClient
 from jira_agent.tools import ToolRegistry, ollama_tool_schemas
 
 SERVER_NAME = "jira-dc-agent"
-SERVER_VERSION = "1.4.1"
+SERVER_VERSION = "1.4.2"
 
 
 def _log(msg: str) -> None:
@@ -45,6 +46,7 @@ class McpServer:
         self._jira: JiraClient | None = None
         self._assets: AssetsClient | None = None
         self._tools: ToolRegistry | None = None
+        self._use_content_length = True
 
     def _ensure_tools(self) -> ToolRegistry:
         if self._tools is None:
@@ -78,15 +80,37 @@ class McpServer:
             self.close()
 
     def _read_message(self) -> dict[str, Any] | None:
+        """Read one JSON-RPC message (Content-Length or NDJSON)."""
+        line = sys.stdin.buffer.readline()
+        if not line:
+            return None
+
+        # NDJSON: first line is already a JSON object
+        stripped = line.lstrip()
+        if stripped.startswith(b"{"):
+            self._use_content_length = False
+            return json.loads(line.decode("utf-8"))
+
+        # Content-Length framing
+        self._use_content_length = True
         headers: dict[str, str] = {}
+        first = line.decode("utf-8", errors="replace").rstrip("\r\n")
+        if ":" in first:
+            key, value = first.split(":", 1)
+            headers[key.strip().lower()] = value.strip()
+
         while True:
-            line = sys.stdin.buffer.readline()
-            if not line:
+            next_line = sys.stdin.buffer.readline()
+            if not next_line:
                 return None
-            if line in (b"\r\n", b"\n"):
+            if next_line in (b"\r\n", b"\n"):
                 break
-            text = line.decode("utf-8", errors="replace").rstrip("\r\n")
+            text = next_line.decode("utf-8", errors="replace").rstrip("\r\n")
             if ":" not in text:
+                # Unexpected: treat as NDJSON payload
+                if text.lstrip().startswith("{"):
+                    self._use_content_length = False
+                    return json.loads(text)
                 continue
             key, value = text.split(":", 1)
             headers[key.strip().lower()] = value.strip()
@@ -104,8 +128,11 @@ class McpServer:
         raw = json.dumps(message, ensure_ascii=False, separators=(",", ":")).encode(
             "utf-8"
         )
-        header = f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii")
-        sys.stdout.buffer.write(header + raw)
+        if self._use_content_length:
+            header = f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii")
+            sys.stdout.buffer.write(header + raw)
+        else:
+            sys.stdout.buffer.write(raw + b"\n")
         sys.stdout.buffer.flush()
 
     def _dispatch(self, message: dict[str, Any]) -> dict[str, Any] | None:
@@ -114,10 +141,11 @@ class McpServer:
         params = message.get("params") or {}
 
         if method == "initialize":
+            client_version = params.get("protocolVersion") or "2024-11-05"
             return self._ok(
                 msg_id,
                 {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": client_version,
                     "capabilities": {"tools": {"listChanged": False}},
                     "serverInfo": {"name": SERVER_NAME, "version": SERVER_VERSION},
                 },
@@ -127,7 +155,6 @@ class McpServer:
         if method == "ping":
             return self._ok(msg_id, {})
         if method == "tools/list":
-            # Fast path: no Jira connection required
             return self._ok(msg_id, {"tools": mcp_tool_defs()})
         if method == "tools/call":
             return self._ok(msg_id, self._call_tool(params))
@@ -168,7 +195,13 @@ def main() -> None:
         settings = get_settings()
     except Exception as exc:  # noqa: BLE001
         _log(f"config error: {exc}")
-        raise SystemExit(1) from exc
+        # Still start server so initialize works; tool calls will fail clearly
+        settings = Settings(
+            jira_base_url="https://invalid.local",
+            jira_username="unset",
+            jira_password="unset",
+        )
+        _log("started with placeholder settings — fix .env / envFile")
 
     _log(
         f"ready jira={settings.jira_base_url} "
