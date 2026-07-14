@@ -26,7 +26,16 @@ def _log(msg: str) -> None:
 
 
 def mcp_tool_defs() -> list[dict[str, Any]]:
-    tools = []
+    tools = [
+        {
+            "name": "jira_health",
+            "description": (
+                "Quick health check: Jira URL, visible project count, Assets schema id. "
+                "Call this first if unsure whether Jira MCP works."
+            ),
+            "inputSchema": {"type": "object", "properties": {}},
+        }
+    ]
     for item in ollama_tool_schemas():
         fn = item.get("function") or {}
         tools.append(
@@ -172,12 +181,41 @@ class McpServer:
         name = params.get("name") or ""
         arguments = params.get("arguments") or {}
         try:
-            text = self._ensure_tools().execute(name, arguments)
+            if name == "jira_health":
+                text = self._health()
+            else:
+                text = self._ensure_tools().execute(name, arguments)
+            text = _truncate(text, 12000)
             return {"content": [{"type": "text", "text": text}], "isError": False}
         except Exception as exc:  # noqa: BLE001
-            err = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
+            err = f"{type(exc).__name__}: {exc}"
             _log(f"tool error {name}: {exc}")
-            return {"content": [{"type": "text", "text": err}], "isError": True}
+            return {
+                "content": [{"type": "text", "text": _truncate(err, 2000)}],
+                "isError": True,
+            }
+
+    def _health(self) -> str:
+        """Lightweight check — no huge payloads."""
+        try:
+            tools = self._ensure_tools()
+            projects = json.loads(tools.execute("list_projects", {}))
+            count = projects.get("count", 0)
+            return json.dumps(
+                {
+                    "ok": True,
+                    "jira": self.settings.jira_base_url,
+                    "projects_visible": count,
+                    "schema_id": self.settings.assets_object_schema_id,
+                    "default_projects": self.settings.jira_project_keys,
+                },
+                ensure_ascii=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            return json.dumps(
+                {"ok": False, "error": str(exc), "jira": self.settings.jira_base_url},
+                ensure_ascii=False,
+            )
 
     @staticmethod
     def _ok(msg_id: Any, result: Any) -> dict[str, Any] | None:
@@ -187,6 +225,12 @@ class McpServer:
 
 
 _MISSING = object()
+
+
+def _truncate(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - 20] + "\n…[truncated]…"
 
 
 def main() -> None:
