@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import sys
-import traceback
 from typing import Any
 
 from jira_agent.assets_client import AssetsClient
